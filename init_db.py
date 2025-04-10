@@ -13,7 +13,8 @@ CREATE_USERS_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
-    email TEXT UNIQUE NOT NULL
+    email TEXT UNIQUE NOT NULL,
+    role TEXT NOT NULL CHECK (role IN ('employee', 'moderator')) DEFAULT 'employee'
 );
 """
 
