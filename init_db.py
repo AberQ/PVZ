@@ -2,10 +2,10 @@ from passlib.context import CryptContext
 import asyncio
 import asyncpg
 
-# Инициализация CryptContext для хеширования
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# Настройки подключения к базе данных
+
 DB_CONFIG = {
     "user": "postgres",
     "password": "123",
