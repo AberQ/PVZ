@@ -10,7 +10,7 @@ from asyncpg.pool import Pool
 from starlette.status import HTTP_400_BAD_REQUEST
 from init_db import DB_CONFIG
 from schemas import *
-
+from typing import List
 app = FastAPI()
 
 # JWT конфигурация
@@ -101,20 +101,77 @@ async def create_pvz(pvz: PVZCreate, role: str = Depends(get_current_role)):
     return {"description": f"ПВЗ создан"}
 
 # Получение всех ПВЗ
-async def get_all_pvz():
+from fastapi import Query
+
+# Получение ПВЗ с фильтрацией по дате приемки и пагинацией
+async def get_filtered_pvz(start_date: str = None, end_date: str = None, page: int = 1, limit: int = 10):
     try:
         async with db_pool.acquire() as conn:
-            rows = await conn.fetch("SELECT * FROM PVZ_table")
-            return rows  # Возвращаем сырые данные из базы
+            # Строим базовый SQL запрос
+            base_query = """
+                SELECT * FROM PVZ_table
+            """
+            filters = []
+            if start_date:
+                filters.append(f"registration_date >= '{start_date}'")
+            if end_date:
+                filters.append(f"registration_date <= '{end_date}'")
+
+            # Применяем фильтры, если они есть
+            if filters:
+                base_query += " WHERE " + " AND ".join(filters)
+
+            # Добавляем пагинацию
+            base_query += f" ORDER BY registration_date LIMIT {limit} OFFSET {(page - 1) * limit}"
+            
+            # Получаем данные
+            rows = await conn.fetch(base_query)
+            
+            # Формируем результат
+            pvz_list = []
+            for row in rows:
+                # Для каждого ПВЗ, получаем связанные приемки
+                receptions = await conn.fetch("""
+                    SELECT * FROM receptions WHERE pvzId = $1
+                """, row["id"])
+                
+                # Для каждой приемки, получаем товары
+                reception_details = []
+                for reception in receptions:
+                    products = await conn.fetch("""
+                        SELECT * FROM products WHERE receptionId = $1
+                    """, reception["id"])
+                    reception_details.append({
+                        "reception": dict(reception),
+                        "products": [dict(product) for product in products]
+                    })
+                
+                pvz_list.append({
+                    "pvz": dict(row),
+                    "receptions": reception_details
+                })
+
+            return pvz_list
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ошибка при получении ПВЗ: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Ошибка при получении данных: {str(e)}")
+
 
 # Маршрут для получения всех ПВЗ
-@app.get("/pvz")
-async def list_pvz():
-    pvz_list = await get_all_pvz()
-    # Преобразуем список строк в формат JSON
-    return [{"id": row["id"], "registration_date": row["registration_date"], "city": row["city"]} for row in pvz_list]
+@app.get("/pvz", response_model=List[dict])
+async def list_pvz(
+    startDate: str = Query(None, description="Начальная дата диапазона"),
+    endDate: str = Query(None, description="Конечная дата диапазона"),
+    page: int = Query(1, ge=1, description="Номер страницы"),
+    limit: int = Query(10, ge=1, le=30, description="Количество элементов на странице"),
+    role: str = Depends(get_current_role)
+):
+    if role not in ["employee", "moderator"]:
+        raise HTTPException(status_code=403, detail="Доступ запрещён")
+    
+    pvz_list = await get_filtered_pvz(start_date=startDate, end_date=endDate, page=page, limit=limit)
+    return pvz_list
+
 
 # Подключение к базе при старте
 @app.on_event("startup")
