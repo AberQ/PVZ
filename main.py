@@ -9,7 +9,7 @@ import asyncpg
 from asyncpg.pool import Pool
 from starlette.status import HTTP_400_BAD_REQUEST
 from init_db import DB_CONFIG
-from schemas import UserCreate
+from schemas import *
 
 app = FastAPI()
 
@@ -33,12 +33,6 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 db_pool: Pool = None
 
 
-# Создание JWT токена
-def create_access_token(data: dict, expires_delta: timedelta = None):
-    to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
 # Вставка пользователя в БД
@@ -62,11 +56,14 @@ async def register(user: UserCreate):
     return {"description": "Пользователь создан"}
 
 
-from pydantic import BaseModel
 
-# Определим модель для тела запроса
-class UserTypeRequest(BaseModel):
-    role: str
+
+# Создание JWT токена
+def create_access_token(data: dict, expires_delta: timedelta = None):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 @app.post("/dummyLogin")
 async def dummy_login(user: UserTypeRequest):
