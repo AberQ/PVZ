@@ -14,7 +14,7 @@ from schemas import UserCreate
 app = FastAPI()
 
 # JWT конфигурация
-SECRET_KEY = "your_secret_key"  # Лучше хранить в переменных окружения
+SECRET_KEY = "0tyfd1TNrniHOvE8KwmLjyDTQ1x025K6hkZVQfVwvSE" 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
