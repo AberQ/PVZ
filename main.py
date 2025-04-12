@@ -68,7 +68,7 @@ async def dummy_login(user: UserTypeRequest):
         raise HTTPException(status_code=400, detail="Неверный тип пользователя")
 
     access_token = create_access_token(data={"sub": user.role})
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {"description": "Успешная авторизация", "access_token": access_token}
 
 
 # Получение роли из токена
