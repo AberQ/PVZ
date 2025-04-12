@@ -65,7 +65,7 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
 @app.post("/dummyLogin")
 async def dummy_login(user: UserTypeRequest):
     if user.role not in ["employee", "moderator"]:
-        raise HTTPException(status_code=400, detail="Неверный тип пользователя")
+        raise HTTPException(status_code=400, detail="Неверный запрос")
 
     access_token = create_access_token(data={"sub": user.role})
     return {"description": "Успешная авторизация", "access_token": access_token}
