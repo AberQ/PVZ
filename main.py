@@ -100,6 +100,21 @@ async def create_pvz(pvz: PVZCreate, role: str = Depends(get_current_role)):
     await insert_pvz(pvz.city)
     return {"description": f"ПВЗ создан"}
 
+# Получение всех ПВЗ
+async def get_all_pvz():
+    try:
+        async with db_pool.acquire() as conn:
+            rows = await conn.fetch("SELECT * FROM PVZ_table")
+            return rows  # Возвращаем сырые данные из базы
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка при получении ПВЗ: {str(e)}")
+
+# Маршрут для получения всех ПВЗ
+@app.get("/pvz")
+async def list_pvz():
+    pvz_list = await get_all_pvz()
+    # Преобразуем список строк в формат JSON
+    return [{"id": row["id"], "registration_date": row["registration_date"], "city": row["city"]} for row in pvz_list]
 
 # Подключение к базе при старте
 @app.on_event("startup")
