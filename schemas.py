@@ -1,5 +1,5 @@
-from pydantic import BaseModel, EmailStr
-
+from pydantic import *
+from enum import Enum
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -10,3 +10,12 @@ class UserCreate(BaseModel):
 
 class UserTypeRequest(BaseModel):
     role: str
+
+
+class CityEnum(str, Enum):
+    moscow = "Москва"
+    spb = "Санкт-Петербург"
+    kazan = "Казань"
+
+class PVZCreate(BaseModel):
+    city: CityEnum

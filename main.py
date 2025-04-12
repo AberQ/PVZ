@@ -74,6 +74,20 @@ async def dummy_login(user: UserTypeRequest):
     return {"access_token": access_token, "token_type": "bearer"}
 
 
+async def insert_pvz(city: str):
+    try:
+        async with db_pool.acquire() as conn:
+            await conn.execute("INSERT INTO PVZ_table (city) VALUES ($1)", city)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка при добавлении ПВЗ: {str(e)}")
+
+
+@app.post("/pvz", status_code=status.HTTP_201_CREATED)
+async def create_pvz(pvz: PVZCreate):
+    await insert_pvz(pvz.city)
+    return {"description": f"ПВЗ создан"}
+
+
 
 # Подключение к базе при старте
 @app.on_event("startup")
