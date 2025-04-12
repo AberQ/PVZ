@@ -2,9 +2,7 @@ from passlib.context import CryptContext
 import asyncio
 import asyncpg
 
-
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 DB_CONFIG = {
     "user": "postgres",
@@ -23,25 +21,37 @@ CREATE TABLE IF NOT EXISTS users (
 );
 """
 
+CREATE_PVZ_TABLE_SQL = """
+-- Включаем расширение для генерации UUID
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
+CREATE TABLE IF NOT EXISTS PVZ_table (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    registration_date TIMESTAMPTZ DEFAULT now(),
+    city TEXT NOT NULL CHECK (city IN ('Москва', 'Санкт-Петербург', 'Казань'))
+);
+"""
 
 async def create_db():
     try:
         print("Подключение к базе данных...")
         conn = await asyncpg.connect(**DB_CONFIG)
+        
         print("Создание таблицы users...")
         await conn.execute(CREATE_USERS_TABLE_SQL)
-        print("Готово! Таблица создана.")
+
+        print("Создание таблицы PVZ_table...")
+        await conn.execute(CREATE_PVZ_TABLE_SQL)
+
+        print("Готово! Таблицы созданы.")
         await conn.close()
     except Exception as e:
         print("Ошибка при создании базы:", e)
 
 async def create_user(email: str, password: str, role: str = 'employee'):
     try:
-        # Подключение к базе данных
         conn = await asyncpg.connect(**DB_CONFIG)
 
-        # Вставка нового пользователя в таблицу
         await conn.execute("""
             INSERT INTO users (email, password, role)
             VALUES ($1, $2, $3)
@@ -54,6 +64,5 @@ async def create_user(email: str, password: str, role: str = 'employee'):
 
 
 if __name__ == "__main__":
-    # Создаем таблицу и добавляем пользователя без поля name
     asyncio.run(create_db())
     asyncio.run(create_user("johndoe@example.com", "password123"))
