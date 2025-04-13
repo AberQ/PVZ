@@ -200,10 +200,19 @@ async def create_reception(pvz_id: int) -> dict:
 
 
 
+async def pvz_exists(pvz_id: int) -> bool:
+    async with db_pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT id FROM PVZ_table WHERE id = $1", pvz_id)
+        return row is not None
+
+
 @app.post("/receptions", response_model=Reception, status_code=201)
 async def create_new_reception(data: ReceptionCreate, role: str = Depends(get_current_role)):
     if role != "employee":
         raise HTTPException(status_code=403, detail="Доступ запрещен")
+
+    if not await pvz_exists(data.pvzId):
+        raise HTTPException(status_code=400, detail="Неверный запрос или есть незакрытая приемка")
 
     if await has_open_reception(data.pvzId):
         raise HTTPException(status_code=400, detail="Неверный запрос или есть незакрытая приемка")
@@ -215,6 +224,7 @@ async def create_new_reception(data: ReceptionCreate, role: str = Depends(get_cu
             "description": "Приемка создана"
         }
     )
+
 
 
 
