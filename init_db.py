@@ -2,19 +2,22 @@ from passlib.context import CryptContext
 import asyncio
 import asyncpg
 import os
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 DB_CONFIG = {
     "user": os.getenv("POSTGRES_USER", "postgres"),
     "password": os.getenv("POSTGRES_PASSWORD", "123"),
-    "host": os.getenv("POSTGRES_HOST", "db"), 
+    "host": os.getenv("POSTGRES_HOST", "db"),
     "port": int(os.getenv("POSTGRES_PORT", 5432)),
     "database": os.getenv("POSTGRES_DB", "postgres"),
 }
 
 CREATE_USERS_TABLE_SQL = """
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
 CREATE TABLE IF NOT EXISTS users (
-    id SERIAL PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     email TEXT UNIQUE NOT NULL,
     password TEXT NOT NULL,
     role TEXT NOT NULL CHECK (role IN ('employee', 'moderator')) DEFAULT 'employee'
@@ -22,10 +25,8 @@ CREATE TABLE IF NOT EXISTS users (
 """
 
 CREATE_PVZ_TABLE_SQL = """
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-
 CREATE TABLE IF NOT EXISTS PVZ_table (
-    id SERIAL PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     registration_date TIMESTAMPTZ DEFAULT now(),
     city TEXT NOT NULL CHECK (city IN ('Москва', 'Санкт-Петербург', 'Казань'))
 );
@@ -33,18 +34,18 @@ CREATE TABLE IF NOT EXISTS PVZ_table (
 
 CREATE_RECEPTION_SQL = """
 CREATE TABLE IF NOT EXISTS receptions (
-    id SERIAL PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     datetime TIMESTAMPTZ DEFAULT now(),
-    pvzId INTEGER NOT NULL REFERENCES PVZ_table(id) ON DELETE CASCADE,
+    pvzId UUID NOT NULL REFERENCES PVZ_table(id) ON DELETE CASCADE,
     status TEXT NOT NULL CHECK (status IN ('in_progress', 'close')) DEFAULT 'in_progress'
 );
 """
 
-CREATE_Products_SQL = """
+CREATE_PRODUCTS_SQL = """
 CREATE TABLE IF NOT EXISTS products (
-    id SERIAL PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     datetime TIMESTAMPTZ DEFAULT now(),
-    receptionId INTEGER NOT NULL REFERENCES receptions(id) ON DELETE CASCADE,
+    receptionId UUID NOT NULL REFERENCES receptions(id) ON DELETE CASCADE,
     type TEXT NOT NULL CHECK (type IN ('электроника', 'одежда', 'обувь'))
 );
 """
@@ -53,7 +54,7 @@ async def create_db():
     try:
         print("Подключение к базе данных...")
         conn = await asyncpg.connect(**DB_CONFIG)
-        
+
         print("Создание таблицы users...")
         await conn.execute(CREATE_USERS_TABLE_SQL)
 
@@ -64,7 +65,7 @@ async def create_db():
         await conn.execute(CREATE_RECEPTION_SQL)
 
         print("Создание таблицы products...")
-        await conn.execute(CREATE_Products_SQL)
+        await conn.execute(CREATE_PRODUCTS_SQL)
 
         print("Готово! Таблицы созданы.")
         await conn.close()
@@ -86,7 +87,7 @@ async def create_user(email: str, password: str, role: str = 'employee'):
     except Exception as e:
         print("Ошибка при создании пользователя:", e)
 
-async def create_test_pvz(city: str = "Москва") -> int:
+async def create_test_pvz(city: str = "Москва") -> str:
     try:
         conn = await asyncpg.connect(**DB_CONFIG)
 
@@ -95,15 +96,15 @@ async def create_test_pvz(city: str = "Москва") -> int:
             RETURNING id
         """, city)
 
-        pvz_id = result['id']
+        pvz_id = str(result['id'])
         print(f"Тестовая запись ПВЗ с городом '{city}' добавлена, ID: {pvz_id}.")
         await conn.close()
         return pvz_id
     except Exception as e:
         print("Ошибка при добавлении тестового ПВЗ:", e)
-        return -1
+        return ""
 
-async def create_goods_reception(pvz_id: int, status: str = "in_progress") -> int:
+async def create_goods_reception(pvz_id: str, status: str = "in_progress") -> str:
     try:
         conn = await asyncpg.connect(**DB_CONFIG)
 
@@ -113,15 +114,15 @@ async def create_goods_reception(pvz_id: int, status: str = "in_progress") -> in
             RETURNING id
         """, pvz_id, status)
 
-        reception_id = result["id"]
+        reception_id = str(result["id"])
         print(f"Приёмка товара создана, ID: {reception_id}")
         await conn.close()
         return reception_id
     except Exception as e:
         print("Ошибка при создании приёмки:", e)
-        return -1
+        return ""
 
-async def create_products(reception_id: int, item_type: str = "электроника"):
+async def create_products(reception_id: str, item_type: str = "электроника"):
     try:
         conn = await asyncpg.connect(**DB_CONFIG)
 
@@ -142,9 +143,9 @@ if __name__ == "__main__":
         await create_user("johndoe@example.com", "password123")
 
         pvz_id = await create_test_pvz("Москва")
-        if pvz_id != -1:
+        if pvz_id:
             reception_id = await create_goods_reception(pvz_id, "close")
-            if reception_id != -1:
+            if reception_id:
                 await create_products(reception_id, "электроника")
                 await create_products(reception_id, "одежда")
 

@@ -187,12 +187,12 @@ async def has_open_reception(pvz_id: int) -> bool:
 
 
 async def create_reception(pvz_id: int) -> dict:
+    new_id = uuid.uuid4()
     async with db_pool.acquire() as conn:
-        new_id = await conn.fetchval("""
-            INSERT INTO receptions (pvzId, datetime, status)
-            VALUES ($1, NOW(), 'in_progress')
-            RETURNING id
-        """, pvz_id)
+        await conn.execute("""
+            INSERT INTO receptions (id, pvzId, datetime, status)
+            VALUES ($1, $2, NOW(), 'in_progress')
+        """, new_id, pvz_id)
         return await conn.fetchrow("""
             SELECT * FROM receptions WHERE id = $1
         """, new_id)

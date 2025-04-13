@@ -1,6 +1,12 @@
 from pydantic import *
 from enum import Enum
 from datetime import datetime
+from uuid import UUID
+import uuid  
+
+
+
+
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
@@ -24,11 +30,11 @@ class PVZCreate(BaseModel):
 
 
 class ReceptionCreate(BaseModel):
-    pvzId: int
+    pvzId: UUID
 
 class Reception(BaseModel):
-    id: int  
-    pvzid: int 
+    id: UUID
+    pvzid: UUID
     datetime: datetime  
     status: str  
 
