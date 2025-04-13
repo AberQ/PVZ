@@ -205,10 +205,15 @@ async def create_new_reception(data: ReceptionCreate, role: str = Depends(get_cu
         raise HTTPException(status_code=403, detail="Доступ запрещен")
 
     if await has_open_reception(data.pvzId):
-        raise HTTPException(status_code=400, detail="Есть незакрытая приемка")
+        raise HTTPException(status_code=400, detail="Неверный запрос или есть незакрытая приемка")
 
     reception = await create_reception(data.pvzId)
-    return dict(reception)
+    return JSONResponse(
+        status_code=201,
+        content={
+            "description": "Приемка создана"
+        }
+    )
 
 
 # Подключение к базе при старте
