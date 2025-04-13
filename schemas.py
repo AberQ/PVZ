@@ -3,6 +3,7 @@ from enum import Enum
 from datetime import datetime
 from uuid import UUID
 import uuid  
+from typing import Literal
 
 
 
@@ -42,3 +43,7 @@ class Reception(BaseModel):
 
 class Error(BaseModel):
     detail: str
+
+class ProductCreate(BaseModel):
+    type: Literal["электроника", "одежда", "обувь"]
+    pvzId: UUID

@@ -12,6 +12,7 @@ from init_db import DB_CONFIG
 from schemas import *
 from typing import List
 from uuid import UUID
+from fastapi import Body
 
 app = FastAPI()
 
@@ -214,6 +215,49 @@ async def create_new_reception(data: ReceptionCreate, role: str = Depends(get_cu
             "description": "Приемка создана"
         }
     )
+
+
+
+async def get_active_reception_id(pvz_id: UUID) -> UUID:
+    async with db_pool.acquire() as conn:
+        row = await conn.fetchrow("""
+            SELECT id FROM receptions
+            WHERE pvzId = $1 AND status = 'in_progress'
+            ORDER BY datetime DESC
+            LIMIT 1
+        """, pvz_id)
+        return row["id"] if row else None
+
+
+
+
+async def insert_product(product_type: str, reception_id: UUID):
+    product_id = uuid.uuid4()
+    async with db_pool.acquire() as conn:
+        await conn.execute("""
+            INSERT INTO products (id, type, receptionId)
+            VALUES ($1, $2, $3)
+        """, product_id, product_type, reception_id)
+
+
+
+
+
+@app.post("/products", status_code=201)
+async def add_product(
+    data: ProductCreate = Body(...),
+    role: str = Depends(get_current_role)
+):
+    if role != "employee":
+        raise HTTPException(status_code=403, detail="Доступ запрещен")
+
+    reception_id = await get_active_reception_id(data.pvzId)
+    if not reception_id:
+        raise HTTPException(status_code=400, detail="Неверный запрос или нет активной приемки")
+
+    await insert_product(data.type, reception_id)
+
+    return {"description": "Товар добавлен"}
 
 
 # Подключение к базе при старте
