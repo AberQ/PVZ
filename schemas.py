@@ -1,6 +1,6 @@
 from pydantic import *
 from enum import Enum
-
+from datetime import datetime
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
@@ -19,3 +19,20 @@ class CityEnum(str, Enum):
 
 class PVZCreate(BaseModel):
     city: CityEnum
+
+
+
+
+class ReceptionCreate(BaseModel):
+    pvzId: int
+
+class Reception(BaseModel):
+    id: int  
+    pvzid: int 
+    datetime: datetime  
+    status: str  
+
+
+
+class Error(BaseModel):
+    detail: str

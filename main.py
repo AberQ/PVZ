@@ -11,6 +11,8 @@ from starlette.status import HTTP_400_BAD_REQUEST
 from init_db import DB_CONFIG
 from schemas import *
 from typing import List
+from uuid import UUID
+
 app = FastAPI()
 
 # JWT конфигурация
@@ -173,6 +175,42 @@ async def list_pvz(
     return pvz_list
 
 
+
+async def has_open_reception(pvz_id: int) -> bool:
+    async with db_pool.acquire() as conn:
+        row = await conn.fetchrow("""
+            SELECT id FROM receptions
+            WHERE pvzId = $1 AND status = 'in_progress'
+        """, pvz_id)
+        return row is not None
+
+
+
+async def create_reception(pvz_id: int) -> dict:
+    async with db_pool.acquire() as conn:
+        new_id = await conn.fetchval("""
+            INSERT INTO receptions (pvzId, datetime, status)
+            VALUES ($1, NOW(), 'in_progress')
+            RETURNING id
+        """, pvz_id)
+        return await conn.fetchrow("""
+            SELECT * FROM receptions WHERE id = $1
+        """, new_id)
+
+
+
+@app.post("/receptions", response_model=Reception, status_code=201)
+async def create_new_reception(data: ReceptionCreate, role: str = Depends(get_current_role)):
+    if role != "employee":
+        raise HTTPException(status_code=403, detail="Доступ запрещен")
+
+    if await has_open_reception(data.pvzId):
+        raise HTTPException(status_code=400, detail="Есть незакрытая приемка")
+
+    reception = await create_reception(data.pvzId)
+    return dict(reception)
+
+
 # Подключение к базе при старте
 @app.on_event("startup")
 async def startup():
@@ -184,3 +222,4 @@ async def startup():
 @app.on_event("shutdown")
 async def shutdown():
     await db_pool.close()
+

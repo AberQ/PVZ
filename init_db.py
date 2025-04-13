@@ -143,7 +143,7 @@ if __name__ == "__main__":
 
         pvz_id = await create_test_pvz("Москва")
         if pvz_id != -1:
-            reception_id = await create_goods_reception(pvz_id)
+            reception_id = await create_goods_reception(pvz_id, "close")
             if reception_id != -1:
                 await create_products(reception_id, "электроника")
                 await create_products(reception_id, "одежда")
