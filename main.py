@@ -270,11 +270,64 @@ async def add_product(
     return {"description": "Товар добавлен"}
 
 
+
+
+
+
+async def get_active_reception_id(pvz_id: UUID) -> UUID:
+    async with db_pool.acquire() as conn:
+        row = await conn.fetchrow("""
+            SELECT id FROM receptions
+            WHERE pvzId = $1 AND status = 'in_progress'
+            ORDER BY datetime DESC
+            LIMIT 1
+        """, pvz_id)
+        return row["id"] if row else None
+
+# Закрытие последней активной приемки
+async def close_last_reception(pvz_id: UUID):
+    active_reception_id = await get_active_reception_id(pvz_id)
+    if not active_reception_id:
+        raise HTTPException(status_code=400, detail="Неверный запрос или приемка уже закрыта")
+
+    async with db_pool.acquire() as conn:
+        
+        await conn.execute("""
+            UPDATE receptions SET status = 'close' WHERE id = $1
+        """, active_reception_id)
+
+        # Получаем обновленную приемку
+        reception = await conn.fetchrow("""
+            SELECT * FROM receptions WHERE id = $1
+        """, active_reception_id)
+        return dict(reception)
+
+
+@app.post("/pvz/{pvzId}/close_last_reception", status_code=200)
+async def close_last_reception_endpoint(pvzId: UUID, role: str = Depends(get_current_role)):
+    if role != "employee":
+        raise HTTPException(status_code=403, detail="Доступ запрещен")
+
+    try:
+        reception = await close_last_reception(pvzId)
+        return JSONResponse(content={"description": "Приемка закрыта"})
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
+
+
+
+
 # Подключение к базе при старте
 @app.on_event("startup")
 async def startup():
     global db_pool
     db_pool = await asyncpg.create_pool(**DB_CONFIG)
+
+
+
+
 
 
 # Закрытие пула при завершении
