@@ -1,21 +1,21 @@
 from passlib.context import CryptContext
 import asyncio
 import asyncpg
-
+import os
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 DB_CONFIG = {
-    "user": "postgres",
-    "password": "123",
-    "host": "localhost",
-    "port": 5432,
-    "database": "PVZ",
+    "user": os.getenv("POSTGRES_USER", "postgres"),
+    "password": os.getenv("POSTGRES_PASSWORD", "123"),
+    "host": os.getenv("POSTGRES_HOST", "db"), 
+    "port": int(os.getenv("POSTGRES_PORT", 5432)),
+    "database": os.getenv("POSTGRES_DB", "postgres"),
 }
 
 CREATE_USERS_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
-    email TEXT UNIQUE NOT NULL,
+    email TEXT NOT NULL,
     password TEXT NOT NULL,
     role TEXT NOT NULL CHECK (role IN ('employee', 'moderator')) DEFAULT 'employee'
 );
