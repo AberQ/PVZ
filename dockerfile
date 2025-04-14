@@ -1,6 +1,9 @@
 # Базовый образ
 FROM python:3.11-slim
 
+# Устанавливаем curl
+RUN apt-get update && apt-get install -y curl
+
 # Устанавливаем рабочую директорию
 WORKDIR /app
 
@@ -18,4 +21,3 @@ EXPOSE 8000
 
 # Запуск FastAPI через uvicorn с 6 воркерами
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "6"]
-#CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

@@ -258,6 +258,7 @@ async def add_product(
     if not reception_id:
         raise HTTPException(status_code=400, detail="Неверный запрос или нет активной приемки")
 
+    await insert_product(data.type, reception_id)
 
     return {"description": "Товар добавлен"}
 
