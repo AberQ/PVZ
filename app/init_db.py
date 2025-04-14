@@ -1,7 +1,8 @@
-from passlib.context import CryptContext
 import asyncio
-import asyncpg
 import os
+
+import asyncpg
+from passlib.context import CryptContext
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -50,6 +51,7 @@ CREATE TABLE IF NOT EXISTS products (
 );
 """
 
+
 async def create_db():
     try:
         print("Подключение к базе данных...")
@@ -71,6 +73,3 @@ async def create_db():
         await conn.close()
     except Exception as e:
         print("Ошибка при создании базы:", e)
-
-
-

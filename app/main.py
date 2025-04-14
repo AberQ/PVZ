@@ -1,18 +1,19 @@
-from fastapi import FastAPI, Request, HTTPException, status, Depends
-from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
-from fastapi.encoders import jsonable_encoder
-from fastapi.security import OAuth2PasswordBearer
-from jose import jwt, JWTError
 from datetime import datetime, timedelta
-import asyncpg
-from asyncpg.pool import Pool
-from starlette.status import HTTP_400_BAD_REQUEST
-from app.init_db import DB_CONFIG
-from app.schemas import *
 from typing import List
 from uuid import UUID
-from fastapi import Body
+
+import asyncpg
+from asyncpg.pool import Pool
+from fastapi import Body, Depends, FastAPI, HTTPException, Request, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from fastapi.security import OAuth2PasswordBearer
+from jose import JWTError, jwt
+from starlette.status import HTTP_400_BAD_REQUEST
+
+from app.init_db import DB_CONFIG
+from app.schemas import *
 
 app = FastAPI()
 
@@ -31,30 +32,33 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         content=jsonable_encoder({"description": "Неверный запрос"}),
     )
 
+
 @app.exception_handler(HTTPException)
 async def custom_http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(
-        status_code=exc.status_code,
-        content={"description": exc.detail}
+        status_code=exc.status_code, content={"description": exc.detail}
     )
 
 
 db_pool: Pool = None
 
 
-
 async def insert_user(email: str, password: str, role: str):
     try:
         async with db_pool.acquire() as conn:
-            await conn.execute("""
+            await conn.execute(
+                """
                 INSERT INTO users (email, password, role)
                 VALUES ($1, $2, $3)
-            """, email, password, role)
+            """,
+                email,
+                password,
+                role,
+            )
     except asyncpg.exceptions.UniqueViolationError:
         raise HTTPException(status_code=400, detail="Неверный запрос")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 
 @app.post("/register", status_code=status.HTTP_201_CREATED)
@@ -63,10 +67,11 @@ async def register(user: UserCreate):
     return {"description": "Пользователь создан"}
 
 
-
 def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    expire = datetime.utcnow() + (
+        expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
@@ -80,7 +85,6 @@ async def dummy_login(user: UserTypeRequest):
     return {"description": "Успешная авторизация", "access_token": access_token}
 
 
-
 async def get_current_role(token: str = Depends(oauth2_scheme)) -> str:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -92,13 +96,14 @@ async def get_current_role(token: str = Depends(oauth2_scheme)) -> str:
         raise HTTPException(status_code=401, detail="Не удалось проверить токен")
 
 
-
 async def insert_pvz(city: str):
     try:
         async with db_pool.acquire() as conn:
             await conn.execute("INSERT INTO PVZ_table (city) VALUES ($1)", city)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ошибка при добавлении ПВЗ: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Ошибка при добавлении ПВЗ: {str(e)}"
+        )
 
 
 @app.post("/pvz", status_code=status.HTTP_201_CREATED)
@@ -112,10 +117,12 @@ async def create_pvz(pvz: PVZCreate, role: str = Depends(get_current_role)):
 from fastapi import Query
 
 
-async def get_filtered_pvz(start_date: str = None, end_date: str = None, page: int = 1, limit: int = 10):
+async def get_filtered_pvz(
+    start_date: str = None, end_date: str = None, page: int = 1, limit: int = 10
+):
     try:
         async with db_pool.acquire() as conn:
-            
+
             base_query = """
                 SELECT * FROM PVZ_table
             """
@@ -125,45 +132,48 @@ async def get_filtered_pvz(start_date: str = None, end_date: str = None, page: i
             if end_date:
                 filters.append(f"registration_date <= '{end_date}'")
 
-         
             if filters:
                 base_query += " WHERE " + " AND ".join(filters)
 
-          
-            base_query += f" ORDER BY registration_date LIMIT {limit} OFFSET {(page - 1) * limit}"
-            
-            
+            base_query += (
+                f" ORDER BY registration_date LIMIT {limit} OFFSET {(page - 1) * limit}"
+            )
+
             rows = await conn.fetch(base_query)
-            
-           
+
             pvz_list = []
             for row in rows:
-               
-                receptions = await conn.fetch("""
+
+                receptions = await conn.fetch(
+                    """
                     SELECT * FROM receptions WHERE pvzId = $1
-                """, row["id"])
-                
-                
+                """,
+                    row["id"],
+                )
+
                 reception_details = []
                 for reception in receptions:
-                    products = await conn.fetch("""
+                    products = await conn.fetch(
+                        """
                         SELECT * FROM products WHERE receptionId = $1
-                    """, reception["id"])
-                    reception_details.append({
-                        "reception": dict(reception),
-                        "products": [dict(product) for product in products]
-                    })
-                
-                pvz_list.append({
-                    "pvz": dict(row),
-                    "receptions": reception_details
-                })
+                    """,
+                        reception["id"],
+                    )
+                    reception_details.append(
+                        {
+                            "reception": dict(reception),
+                            "products": [dict(product) for product in products],
+                        }
+                    )
+
+                pvz_list.append({"pvz": dict(row), "receptions": reception_details})
 
             return pvz_list
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ошибка при получении данных: {str(e)}")
-
+        raise HTTPException(
+            status_code=500, detail=f"Ошибка при получении данных: {str(e)}"
+        )
 
 
 @app.get("/pvz", response_model=List[dict])
@@ -172,37 +182,46 @@ async def list_pvz(
     endDate: str = Query(None, description="Конечная дата диапазона"),
     page: int = Query(1, ge=1, description="Номер страницы"),
     limit: int = Query(10, ge=1, le=30, description="Количество элементов на странице"),
-    role: str = Depends(get_current_role)
+    role: str = Depends(get_current_role),
 ):
     if role not in ["employee", "moderator"]:
         raise HTTPException(status_code=403, detail="Доступ запрещён")
-    
-    pvz_list = await get_filtered_pvz(start_date=startDate, end_date=endDate, page=page, limit=limit)
-    return pvz_list
 
+    pvz_list = await get_filtered_pvz(
+        start_date=startDate, end_date=endDate, page=page, limit=limit
+    )
+    return pvz_list
 
 
 async def has_open_reception(pvz_id: int) -> bool:
     async with db_pool.acquire() as conn:
-        row = await conn.fetchrow("""
+        row = await conn.fetchrow(
+            """
             SELECT id FROM receptions
             WHERE pvzId = $1 AND status = 'in_progress'
-        """, pvz_id)
+        """,
+            pvz_id,
+        )
         return row is not None
-
 
 
 async def create_reception(pvz_id: int) -> dict:
     new_id = uuid.uuid4()
     async with db_pool.acquire() as conn:
-        await conn.execute("""
+        await conn.execute(
+            """
             INSERT INTO receptions (id, pvzId, datetime, status)
             VALUES ($1, $2, NOW(), 'in_progress')
-        """, new_id, pvz_id)
-        return await conn.fetchrow("""
+        """,
+            new_id,
+            pvz_id,
+        )
+        return await conn.fetchrow(
+            """
             SELECT * FROM receptions WHERE id = $1
-        """, new_id)
-
+        """,
+            new_id,
+        )
 
 
 async def pvz_exists(pvz_id: int) -> bool:
@@ -212,91 +231,102 @@ async def pvz_exists(pvz_id: int) -> bool:
 
 
 @app.post("/receptions", response_model=Reception, status_code=201)
-async def create_new_reception(data: ReceptionCreate, role: str = Depends(get_current_role)):
+async def create_new_reception(
+    data: ReceptionCreate, role: str = Depends(get_current_role)
+):
     if role != "employee":
         raise HTTPException(status_code=403, detail="Доступ запрещен")
 
     if not await pvz_exists(data.pvzId):
-        raise HTTPException(status_code=400, detail="Неверный запрос или есть незакрытая приемка")
+        raise HTTPException(
+            status_code=400, detail="Неверный запрос или есть незакрытая приемка"
+        )
 
     if await has_open_reception(data.pvzId):
-        raise HTTPException(status_code=400, detail="Неверный запрос или есть незакрытая приемка")
+        raise HTTPException(
+            status_code=400, detail="Неверный запрос или есть незакрытая приемка"
+        )
 
     reception = await create_reception(data.pvzId)
-    return JSONResponse(
-        status_code=201,
-        content={
-            "description": "Приемка создана"
-        }
-    )
-
-
-
+    return JSONResponse(status_code=201, content={"description": "Приемка создана"})
 
 
 async def insert_product(product_type: str, reception_id: UUID):
     product_id = uuid.uuid4()
     async with db_pool.acquire() as conn:
-        await conn.execute("""
+        await conn.execute(
+            """
             INSERT INTO products (id, type, receptionId)
             VALUES ($1, $2, $3)
-        """, product_id, product_type, reception_id)
-
-
-
+        """,
+            product_id,
+            product_type,
+            reception_id,
+        )
 
 
 @app.post("/products", status_code=201)
 async def add_product(
-    data: ProductCreate = Body(...),
-    role: str = Depends(get_current_role)
+    data: ProductCreate = Body(...), role: str = Depends(get_current_role)
 ):
     if role != "employee":
         raise HTTPException(status_code=403, detail="Доступ запрещен")
 
     reception_id = await get_active_reception_id(data.pvzId)
     if not reception_id:
-        raise HTTPException(status_code=400, detail="Неверный запрос или нет активной приемки")
+        raise HTTPException(
+            status_code=400, detail="Неверный запрос или нет активной приемки"
+        )
 
     await insert_product(data.type, reception_id)
 
     return {"description": "Товар добавлен"}
 
 
-
-
-
-
 async def get_active_reception_id(pvz_id: UUID) -> UUID:
     async with db_pool.acquire() as conn:
-        row = await conn.fetchrow("""
+        row = await conn.fetchrow(
+            """
             SELECT id FROM receptions
             WHERE pvzId = $1 AND status = 'in_progress'
             ORDER BY datetime DESC
             LIMIT 1
-        """, pvz_id)
+        """,
+            pvz_id,
+        )
         return row["id"] if row else None
+
 
 async def close_last_reception(pvz_id: UUID):
     active_reception_id = await get_active_reception_id(pvz_id)
     if not active_reception_id:
-        raise HTTPException(status_code=400, detail="Неверный запрос или приемка уже закрыта")
+        raise HTTPException(
+            status_code=400, detail="Неверный запрос или приемка уже закрыта"
+        )
 
     async with db_pool.acquire() as conn:
-        
-        await conn.execute("""
+
+        await conn.execute(
+            """
             UPDATE receptions SET status = 'close' WHERE id = $1
-        """, active_reception_id)
+        """,
+            active_reception_id,
+        )
 
         # Получаем обновленную приемку
-        reception = await conn.fetchrow("""
+        reception = await conn.fetchrow(
+            """
             SELECT * FROM receptions WHERE id = $1
-        """, active_reception_id)
+        """,
+            active_reception_id,
+        )
         return dict(reception)
 
 
 @app.post("/pvz/{pvzId}/close_last_reception", status_code=200)
-async def close_last_reception_endpoint(pvzId: UUID, role: str = Depends(get_current_role)):
+async def close_last_reception_endpoint(
+    pvzId: UUID, role: str = Depends(get_current_role)
+):
     if role != "employee":
         raise HTTPException(status_code=403, detail="Доступ запрещен")
 
@@ -309,10 +339,11 @@ async def close_last_reception_endpoint(pvzId: UUID, role: str = Depends(get_cur
         raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
 
 
-
-
-
-@app.post("/pvz/{pvz_id}/delete_last_product", status_code=200, summary="Удаление последнего добавленного товара из текущей приемки (LIFO, только для сотрудников ПВЗ)")
+@app.post(
+    "/pvz/{pvz_id}/delete_last_product",
+    status_code=200,
+    summary="Удаление последнего добавленного товара из текущей приемки (LIFO, только для сотрудников ПВЗ)",
+)
 async def delete_last_product(pvz_id: UUID, role: str = Depends(get_current_role)):
     if role != "employee":
         raise HTTPException(status_code=403, detail="Доступ запрещен")
@@ -320,39 +351,46 @@ async def delete_last_product(pvz_id: UUID, role: str = Depends(get_current_role
     conn = await asyncpg.connect(**DB_CONFIG)
 
     try:
-   
-        reception = await conn.fetchrow("""
+
+        reception = await conn.fetchrow(
+            """
             SELECT id FROM receptions
             WHERE pvzId = $1 AND status = 'in_progress'
             ORDER BY datetime DESC
             LIMIT 1
-        """, str(pvz_id))
+        """,
+            str(pvz_id),
+        )
 
         if not reception:
-            raise HTTPException(status_code=400, detail="Неверный запрос, нет активной приемки или нет товаров для удаления")
+            raise HTTPException(
+                status_code=400,
+                detail="Неверный запрос, нет активной приемки или нет товаров для удаления",
+            )
 
         reception_id = reception["id"]
 
-       
-        product = await conn.fetchrow("""
+        product = await conn.fetchrow(
+            """
             SELECT id FROM products
             WHERE receptionId = $1
             ORDER BY datetime DESC
             LIMIT 1
-        """, str(reception_id))
+        """,
+            str(reception_id),
+        )
 
         if not product:
-            raise HTTPException(status_code=400, detail="Неверный запрос, нет активной приемки или нет товаров для удаления")
+            raise HTTPException(
+                status_code=400,
+                detail="Неверный запрос, нет активной приемки или нет товаров для удаления",
+            )
 
-   
         await conn.execute("DELETE FROM products WHERE id = $1", product["id"])
         return {"description": "Товар удален"}
 
-
-
     finally:
         await conn.close()
-
 
 
 @app.on_event("startup")
@@ -361,12 +399,6 @@ async def startup():
     db_pool = await asyncpg.create_pool(**DB_CONFIG)
 
 
-
-
-
-
-
 @app.on_event("shutdown")
 async def shutdown():
     await db_pool.close()
-
