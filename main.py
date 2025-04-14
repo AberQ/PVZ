@@ -16,7 +16,7 @@ from fastapi import Body
 
 app = FastAPI()
 
-# JWT конфигурация
+
 SECRET_KEY = "0tyfd1TNrniHOvE8KwmLjyDTQ1x025K6hkZVQfVwvSE"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
@@ -31,12 +31,18 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         content=jsonable_encoder({"description": "Неверный запрос"}),
     )
 
+@app.exception_handler(HTTPException)
+async def custom_http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"description": exc.detail}
+    )
 
-# Глобальный пул подключений
+
 db_pool: Pool = None
 
 
-# Вставка пользователя в БД
+
 async def insert_user(email: str, password: str, role: str):
     try:
         async with db_pool.acquire() as conn:
@@ -45,19 +51,19 @@ async def insert_user(email: str, password: str, role: str):
                 VALUES ($1, $2, $3)
             """, email, password, role)
     except asyncpg.exceptions.UniqueViolationError:
-        raise HTTPException(status_code=400, detail="Пользователь с таким email уже существует")
+        raise HTTPException(status_code=400, detail="Неверный запрос")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# Регистрация пользователя
+
 @app.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(user: UserCreate):
     await insert_user(user.email, user.password, user.role)
     return {"description": "Пользователь создан"}
 
 
-# Создание JWT токена
+
 def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
@@ -74,7 +80,7 @@ async def dummy_login(user: UserTypeRequest):
     return {"description": "Успешная авторизация", "access_token": access_token}
 
 
-# Получение роли из токена
+
 async def get_current_role(token: str = Depends(oauth2_scheme)) -> str:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -86,7 +92,7 @@ async def get_current_role(token: str = Depends(oauth2_scheme)) -> str:
         raise HTTPException(status_code=401, detail="Не удалось проверить токен")
 
 
-# Вставка ПВЗ
+
 async def insert_pvz(city: str):
     try:
         async with db_pool.acquire() as conn:
@@ -95,22 +101,21 @@ async def insert_pvz(city: str):
         raise HTTPException(status_code=500, detail=f"Ошибка при добавлении ПВЗ: {str(e)}")
 
 
-# Добавление нового ПВЗ (только для модераторов)
 @app.post("/pvz", status_code=status.HTTP_201_CREATED)
 async def create_pvz(pvz: PVZCreate, role: str = Depends(get_current_role)):
     if role != "moderator":
-        raise HTTPException(status_code=403, detail="Доступ запрещён: требуется роль 'moderator'")
+        raise HTTPException(status_code=403, detail="Доступ запрещён'")
     await insert_pvz(pvz.city)
     return {"description": f"ПВЗ создан"}
 
-# Получение всех ПВЗ
+
 from fastapi import Query
 
-# Получение ПВЗ с фильтрацией по дате приемки и пагинацией
+
 async def get_filtered_pvz(start_date: str = None, end_date: str = None, page: int = 1, limit: int = 10):
     try:
         async with db_pool.acquire() as conn:
-            # Строим базовый SQL запрос
+            
             base_query = """
                 SELECT * FROM PVZ_table
             """
@@ -120,25 +125,25 @@ async def get_filtered_pvz(start_date: str = None, end_date: str = None, page: i
             if end_date:
                 filters.append(f"registration_date <= '{end_date}'")
 
-            # Применяем фильтры, если они есть
+         
             if filters:
                 base_query += " WHERE " + " AND ".join(filters)
 
-            # Добавляем пагинацию
+          
             base_query += f" ORDER BY registration_date LIMIT {limit} OFFSET {(page - 1) * limit}"
             
-            # Получаем данные
+            
             rows = await conn.fetch(base_query)
             
-            # Формируем результат
+           
             pvz_list = []
             for row in rows:
-                # Для каждого ПВЗ, получаем связанные приемки
+               
                 receptions = await conn.fetch("""
                     SELECT * FROM receptions WHERE pvzId = $1
                 """, row["id"])
                 
-                # Для каждой приемки, получаем товары
+                
                 reception_details = []
                 for reception in receptions:
                     products = await conn.fetch("""
@@ -160,7 +165,7 @@ async def get_filtered_pvz(start_date: str = None, end_date: str = None, page: i
         raise HTTPException(status_code=500, detail=f"Ошибка при получении данных: {str(e)}")
 
 
-# Маршрут для получения всех ПВЗ
+
 @app.get("/pvz", response_model=List[dict])
 async def list_pvz(
     startDate: str = Query(None, description="Начальная дата диапазона"),
@@ -228,18 +233,6 @@ async def create_new_reception(data: ReceptionCreate, role: str = Depends(get_cu
 
 
 
-async def get_active_reception_id(pvz_id: UUID) -> UUID:
-    async with db_pool.acquire() as conn:
-        row = await conn.fetchrow("""
-            SELECT id FROM receptions
-            WHERE pvzId = $1 AND status = 'in_progress'
-            ORDER BY datetime DESC
-            LIMIT 1
-        """, pvz_id)
-        return row["id"] if row else None
-
-
-
 
 async def insert_product(product_type: str, reception_id: UUID):
     product_id = uuid.uuid4()
@@ -265,7 +258,6 @@ async def add_product(
     if not reception_id:
         raise HTTPException(status_code=400, detail="Неверный запрос или нет активной приемки")
 
-    await insert_product(data.type, reception_id)
 
     return {"description": "Товар добавлен"}
 
@@ -284,7 +276,6 @@ async def get_active_reception_id(pvz_id: UUID) -> UUID:
         """, pvz_id)
         return row["id"] if row else None
 
-# Закрытие последней активной приемки
 async def close_last_reception(pvz_id: UUID):
     active_reception_id = await get_active_reception_id(pvz_id)
     if not active_reception_id:
@@ -328,7 +319,7 @@ async def delete_last_product(pvz_id: UUID, role: str = Depends(get_current_role
     conn = await asyncpg.connect(**DB_CONFIG)
 
     try:
-        # Найти приёмку со статусом in_progress
+   
         reception = await conn.fetchrow("""
             SELECT id FROM receptions
             WHERE pvzId = $1 AND status = 'in_progress'
@@ -341,7 +332,7 @@ async def delete_last_product(pvz_id: UUID, role: str = Depends(get_current_role
 
         reception_id = reception["id"]
 
-        # Найти последний добавленный товар (LIFO)
+       
         product = await conn.fetchrow("""
             SELECT id FROM products
             WHERE receptionId = $1
@@ -352,7 +343,7 @@ async def delete_last_product(pvz_id: UUID, role: str = Depends(get_current_role
         if not product:
             raise HTTPException(status_code=400, detail="Неверный запрос, нет активной приемки или нет товаров для удаления")
 
-        # Удалить товар
+   
         await conn.execute("DELETE FROM products WHERE id = $1", product["id"])
         return {"description": "Товар удален"}
 
@@ -362,7 +353,7 @@ async def delete_last_product(pvz_id: UUID, role: str = Depends(get_current_role
         await conn.close()
 
 
-# Подключение к базе при старте
+
 @app.on_event("startup")
 async def startup():
     global db_pool
@@ -373,7 +364,7 @@ async def startup():
 
 
 
-# Закрытие пула при завершении
+
 @app.on_event("shutdown")
 async def shutdown():
     await db_pool.close()
