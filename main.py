@@ -319,6 +319,49 @@ async def close_last_reception_endpoint(pvzId: UUID, role: str = Depends(get_cur
 
 
 
+
+@app.post("/pvz/{pvz_id}/delete_last_product", status_code=200, summary="Удаление последнего добавленного товара из текущей приемки (LIFO, только для сотрудников ПВЗ)")
+async def delete_last_product(pvz_id: UUID, role: str = Depends(get_current_role)):
+    if role != "employee":
+        raise HTTPException(status_code=403, detail="Доступ запрещен")
+
+    conn = await asyncpg.connect(**DB_CONFIG)
+
+    try:
+        # Найти приёмку со статусом in_progress
+        reception = await conn.fetchrow("""
+            SELECT id FROM receptions
+            WHERE pvzId = $1 AND status = 'in_progress'
+            ORDER BY datetime DESC
+            LIMIT 1
+        """, str(pvz_id))
+
+        if not reception:
+            raise HTTPException(status_code=400, detail="Неверный запрос, нет активной приемки или нет товаров для удаления")
+
+        reception_id = reception["id"]
+
+        # Найти последний добавленный товар (LIFO)
+        product = await conn.fetchrow("""
+            SELECT id FROM products
+            WHERE receptionId = $1
+            ORDER BY datetime DESC
+            LIMIT 1
+        """, str(reception_id))
+
+        if not product:
+            raise HTTPException(status_code=400, detail="Неверный запрос, нет активной приемки или нет товаров для удаления")
+
+        # Удалить товар
+        await conn.execute("DELETE FROM products WHERE id = $1", product["id"])
+        return {"description": "Товар удален"}
+
+
+
+    finally:
+        await conn.close()
+
+
 # Подключение к базе при старте
 @app.on_event("startup")
 async def startup():
