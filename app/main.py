@@ -8,8 +8,8 @@ from datetime import datetime, timedelta
 import asyncpg
 from asyncpg.pool import Pool
 from starlette.status import HTTP_400_BAD_REQUEST
-from init_db import DB_CONFIG
-from schemas import *
+from app.init_db import DB_CONFIG
+from app.schemas import *
 from typing import List
 from uuid import UUID
 from fastapi import Body

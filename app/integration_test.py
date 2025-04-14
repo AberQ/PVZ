@@ -4,7 +4,7 @@ def print_error(response, context=""):
     print(f"❌ Ошибка на этапе {context}: {response.status_code}")
     print(response.text)
 
-print("Начало интеграционного тестирования")
+print("Итоги интеграционного тестирования")
 # 1. Авторизация модератора
 url_login = "http://127.0.0.1:8000/dummyLogin"
 data_login = {"role": "moderator"}
